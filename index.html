@@ -1350,12 +1350,42 @@
 
       </div>
 
-      <!-- ================= EVENTOS: PARTICIPANTES (stub) ================= -->
+      <!-- ================= EVENTOS: PARTICIPANTES ================= -->
       <div class="page" id="page-eventos-participantes">
-        <div class="stub-page">
-          <div class="ico">👥</div>
-          <h3>Participantes</h3>
-          <p>Lista individual de inscritos por evento ainda não foi construída neste painel. Por enquanto, os números agregados de inscrições ficam em Eventos e Início.</p>
+        <div class="locked-note" id="participantesLockedNote">🔒 <b>Somente leitura.</b> Desbloqueie em Configurações para adicionar ou editar participantes.</div>
+
+        <div class="kpi-row">
+          <div class="kpi-card c4">
+            <div class="kpi-ico">👥</div>
+            <div><div class="kpi-lbl">Total de participantes</div><div class="kpi-val" id="partTotal">0</div></div>
+          </div>
+          <div class="kpi-card c1">
+            <div class="kpi-ico">🍽️</div>
+            <div><div class="kpi-lbl">Confirmados Jantar</div><div class="kpi-val" id="partJantarConf">0</div></div>
+          </div>
+          <div class="kpi-card c2">
+            <div class="kpi-ico">✨</div>
+            <div><div class="kpi-lbl">Confirmados Imersão</div><div class="kpi-val" id="partImersaoConf">0</div></div>
+          </div>
+          <div class="kpi-card c3">
+            <div class="kpi-ico">🌿</div>
+            <div><div class="kpi-lbl">Confirmados Flow</div><div class="kpi-val" id="partFlowConf">0</div></div>
+          </div>
+        </div>
+
+        <div class="panel" style="margin-bottom:18px;">
+          <div class="panel-body" style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;justify-content:space-between;">
+            <input type="text" id="partSearch" placeholder="Buscar por nome ou e-mail..." style="flex:1;min-width:220px;padding:11px 13px;border:1.5px solid var(--line);border-radius:10px;font-size:14px;background:var(--cream);font-family:'Inter',sans-serif;">
+            <div style="display:none;gap:8px;" id="partActionButtons">
+              <button class="btn-secondary" id="btnAddParticipante">➕ Adicionar</button>
+              <button class="btn-secondary" id="btnImportarParticipantes">📋 Importar em lote</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="panel">
+          <div class="panel-head"><h3>Participantes</h3><span id="partCount" style="font-size:11.5px;color:#9a8a72;"></span></div>
+          <div class="panel-body" id="partList" style="max-height:600px;overflow-y:auto;"></div>
         </div>
       </div>
 
@@ -1554,11 +1584,86 @@
   </div>
 </div>
 
+<!-- MODAL: ADICIONAR / EDITAR PARTICIPANTE -->
+<div class="overlay" id="participanteModal">
+  <div class="modal" style="max-width:520px;">
+    <h3 id="partModalTitle">Adicionar participante</h3>
+
+    <label>Nome</label>
+    <input type="text" id="partNome" placeholder="Nome completo">
+    <label>E-mail</label>
+    <input type="text" id="partEmail" placeholder="email@exemplo.com">
+
+    <div class="row2">
+      <div>
+        <label style="margin-top:0">Jantar — Compra</label>
+        <select id="partJantarCompra" style="width:100%;padding:11px 13px;border:1.5px solid var(--line);border-radius:10px;font-size:15px;background:var(--cream);font-family:'Inter',sans-serif;">
+          <option value="">—</option><option value="PicPay">PicPay</option><option value="Sympla">Sympla</option>
+        </select>
+      </div>
+      <div>
+        <label style="margin-top:0">Jantar — WhatsApp</label>
+        <select id="partJantarWhats" style="width:100%;padding:11px 13px;border:1.5px solid var(--line);border-radius:10px;font-size:15px;background:var(--cream);font-family:'Inter',sans-serif;">
+          <option value="0">Pendente</option><option value="1">Confirmada</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="row2">
+      <div>
+        <label style="margin-top:0">Imersão — Compra</label>
+        <select id="partImersaoCompra" style="width:100%;padding:11px 13px;border:1.5px solid var(--line);border-radius:10px;font-size:15px;background:var(--cream);font-family:'Inter',sans-serif;">
+          <option value="">—</option><option value="Sympla">Sympla</option><option value="Comissão">Comissão</option>
+        </select>
+      </div>
+      <div>
+        <label style="margin-top:0">Imersão — WhatsApp</label>
+        <select id="partImersaoWhats" style="width:100%;padding:11px 13px;border:1.5px solid var(--line);border-radius:10px;font-size:15px;background:var(--cream);font-family:'Inter',sans-serif;">
+          <option value="0">Pendente</option><option value="1">Confirmada</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="row2">
+      <div>
+        <label style="margin-top:0">Flow — Bônus</label>
+        <select id="partFlowBonus" style="width:100%;padding:11px 13px;border:1.5px solid var(--line);border-radius:10px;font-size:15px;background:var(--cream);font-family:'Inter',sans-serif;">
+          <option value="0">Não</option><option value="1">Bônus</option>
+        </select>
+      </div>
+      <div>
+        <label style="margin-top:0">Flow — WhatsApp</label>
+        <select id="partFlowWhats" style="width:100%;padding:11px 13px;border:1.5px solid var(--line);border-radius:10px;font-size:15px;background:var(--cream);font-family:'Inter',sans-serif;">
+          <option value="0">Pendente</option><option value="1">Confirmada</option>
+        </select>
+      </div>
+    </div>
+
+    <button class="primary" id="partSaveBtn" style="margin-top:16px;">Salvar</button>
+    <div class="success" id="partSaveSuccess">Salvo!</div>
+    <button class="secondary" id="partDeleteBtn" style="color:#B23A3A;display:none;">🗑️ Excluir participante</button>
+    <button class="secondary" id="partCloseBtn">Fechar</button>
+  </div>
+</div>
+
+<!-- MODAL: IMPORTAR PARTICIPANTES EM LOTE -->
+<div class="overlay" id="importParticipantesModal">
+  <div class="modal" style="max-width:640px;">
+    <h3>Importar participantes em lote</h3>
+    <p class="hint">Cole aqui as linhas copiadas da planilha (colunas separadas por Tab, na ordem): Nome, E-mail, Compra Jantar, WhatsApp Jantar, Compra Imersão, WhatsApp Imersão, Bônus, WhatsApp Flow. Pode colar com ou sem a linha de cabeçalho — quem já existir (mesmo nome ou e-mail) é atualizado, não duplicado.</p>
+    <textarea id="partImportText" style="width:100%;height:240px;font-size:11.5px;font-family:monospace;border:1.5px solid var(--line);border-radius:10px;padding:10px;background:var(--cream);"></textarea>
+    <button class="primary" id="partImportConfirm" style="margin-top:12px;">Importar</button>
+    <div class="success" id="partImportSuccess" style="display:none;margin-top:8px;"></div>
+    <button class="secondary" id="partImportClose">Fechar</button>
+  </div>
+</div>
+
 <!-- MODAL: VISUALIZAR / EDITAR LANÇAMENTO -->
 <div class="overlay" id="lancamentoModal">
   <div class="modal" style="max-width:480px;">
     <h3 id="lancModalTitle">Lançamento</h3>
     <p class="hint" style="margin-top:0;" id="lancModalOrigem"></p>
+
 
     <label>Data</label>
     <input type="date" id="lancEditDate">
@@ -1593,7 +1698,6 @@
 
 <script>
 const ADMIN_PIN = '2609';
-
 // ================= ARMAZENAMENTO (API própria na Vercel, substitui window.storage) =================
 async function apiStorageGet(key){
   const res = await fetch('/api/storage?key=' + encodeURIComponent(key));
@@ -1618,7 +1722,7 @@ const ANTECIPACAO_FEE = 0.0349; // taxa de antecipação sobre 100% do valor lí
 const TOTAL_JANTAR = 50;
 const TOTAL_IMERSAO = 200;
 
-const DEFAULTS = { entries: [], confirmed: {jantar:0, imersao:0, flow:0}, lastUpdated: null, weeks: [] };
+const DEFAULTS = { entries: [], confirmed: {jantar:0, imersao:0, flow:0}, lastUpdated: null, weeks: [], participantes: [] };
 let data = JSON.parse(JSON.stringify(DEFAULTS));
 
 async function loadData(){
@@ -1639,6 +1743,9 @@ async function loadData(){
   }catch(e){
     data = JSON.parse(JSON.stringify(DEFAULTS));
   }
+  if(!data.participantes) data.participantes = [];
+  const partIds = data.participantes.map(p=>p.id||0);
+  partNextId = partIds.length ? Math.max(...partIds)+1 : 1;
   render();
   document.getElementById('loading').style.display = 'none';
 }
@@ -1979,6 +2086,7 @@ function navigateTo(pageId){
   window.scrollTo(0,0);
   if(pageId==='inicio') renderInicio();
   if(pageId==='eventos-lista') renderEventosLista();
+  if(pageId==='eventos-participantes') renderParticipantes();
   if(pageId==='fin-visao') renderFinVisao();
   if(pageId==='fin-lancamentos') renderLancamentos();
   if(pageId==='fin-contas-pagar') renderContasPagar();
@@ -2014,8 +2122,11 @@ function applyUnlockUI(){
   if(novoLanc) novoLanc.style.display = organizerUnlocked ? 'block' : 'none';
   const importPanel = document.getElementById('importPanel');
   if(importPanel) importPanel.style.display = organizerUnlocked ? 'block' : 'none';
+  const partButtons = document.getElementById('partActionButtons');
+  if(partButtons) partButtons.style.display = organizerUnlocked ? 'flex' : 'none';
   // refaz as listas na hora, pra já mostrar os botões de editar/excluir sem precisar trocar de página
   if(typeof renderFinanceiro === 'function') renderFinanceiro();
+  if(typeof renderParticipantes === 'function') renderParticipantes();
 }
 
 // campo de senha direto na tela de Configurações
@@ -2591,6 +2702,195 @@ function eventoStats(key, t){
   const elegiveis = t.jantarTotal + t.imersaoTotal;
   return {sold: elegiveis, total: elegiveis, gross: 0, ativo: '2026-09-26' >= hoje};
 }
+
+// ================= PARTICIPANTES =================
+function normalizeNome(s){
+  return String(s).toLowerCase()
+    .normalize('NFD').replace(/[\u0300-\u036f]/g,'')
+    .replace(/[^a-z\s]/g,'')
+    .trim();
+}
+let partNextId = 1;
+let partSearchTerm = '';
+let editingParticipante = null; // id ou null (novo)
+
+function boolFromWhats(v){ return v==='1'||v===1||v===true; }
+
+async function saveParticipante(p){
+  const idx = data.participantes.findIndex(x=>x.id===p.id);
+  if(idx>=0) data.participantes[idx] = p; else data.participantes.push(p);
+  await saveData();
+  renderParticipantes();
+  renderInicio();
+}
+
+async function deleteParticipante(id){
+  data.participantes = data.participantes.filter(p=>p.id!==id);
+  await saveData();
+  renderParticipantes();
+}
+
+function findExistingParticipante(nome, email){
+  const nomeNorm = normalizeNome(nome);
+  const emailNorm = (email||'').trim().toLowerCase();
+  return data.participantes.find(p=>{
+    if(emailNorm && p.email && p.email.trim().toLowerCase()===emailNorm) return true;
+    return normalizeNome(p.nome)===nomeNorm;
+  });
+}
+
+function parseBulkParticipantes(text){
+  const lines = text.split(/\r?\n/).map(l=>l.trim()).filter(l=>l.length);
+  let added = 0, atualizados = 0;
+  lines.forEach(line=>{
+    let cols = line.split('\t');
+    if(cols.length < 2) cols = line.split(/ {2,}/); // fallback se não tiver tab
+    const nome = (cols[0]||'').trim();
+    if(!nome) return;
+    if(/^nome$/i.test(nome)) return; // pula linha de cabeçalho
+    const email = (cols[1]||'').trim();
+    const jantarCompra = (cols[2]||'').trim();
+    const jantarWhats = /confirmad/i.test(cols[3]||'');
+    const imersaoCompra = (cols[4]||'').trim();
+    const imersaoWhats = /confirmad/i.test(cols[5]||'');
+    const flowBonus = /b[ôo]nus/i.test(cols[6]||'');
+    const flowWhats = /confirmad/i.test(cols[7]||'');
+
+    const existing = findExistingParticipante(nome, email);
+    const registro = existing ? {...existing} : {id: partNextId++, nome, email};
+    registro.nome = nome;
+    registro.email = email;
+    registro.jantarCompra = jantarCompra;
+    registro.jantarWhats = jantarWhats;
+    registro.imersaoCompra = imersaoCompra;
+    registro.imersaoWhats = imersaoWhats;
+    registro.flowBonus = flowBonus;
+    registro.flowWhats = flowWhats;
+
+    const idx = data.participantes.findIndex(x=>x.id===registro.id);
+    if(idx>=0){ data.participantes[idx] = registro; atualizados++; }
+    else{ data.participantes.push(registro); added++; }
+  });
+  return {added, atualizados};
+}
+
+function renderParticipantes(){
+  const termo = normalizeNome(partSearchTerm);
+  const lista = data.participantes.filter(p=>{
+    if(!termo) return true;
+    return normalizeNome(p.nome).includes(termo) || (p.email||'').toLowerCase().includes(partSearchTerm.toLowerCase());
+  }).sort((a,b)=> a.nome.localeCompare(b.nome));
+
+  document.getElementById('partTotal').textContent = data.participantes.length;
+  document.getElementById('partJantarConf').textContent = data.participantes.filter(p=>p.jantarWhats).length;
+  document.getElementById('partImersaoConf').textContent = data.participantes.filter(p=>p.imersaoWhats).length;
+  document.getElementById('partFlowConf').textContent = data.participantes.filter(p=>p.flowWhats).length;
+  document.getElementById('partCount').textContent = lista.length + ' de ' + data.participantes.length;
+
+  const el = document.getElementById('partList');
+  if(!lista.length){
+    el.innerHTML = '<div class="fin-empty">' + (data.participantes.length ? 'Nenhum resultado para essa busca.' : 'Nenhum participante cadastrado ainda.') + '</div>';
+    return;
+  }
+  el.innerHTML = lista.map(p=>{
+    const jantarTxt = p.jantarCompra ? (p.jantarCompra + (p.jantarWhats ? ' · ✅ Confirmada' : ' · ⏳ pendente')) : '—';
+    const imersaoTxt = p.imersaoCompra ? (p.imersaoCompra + (p.imersaoWhats ? ' · ✅ Confirmada' : ' · ⏳ pendente')) : '—';
+    const flowTxt = p.flowBonus ? ('Bônus' + (p.flowWhats ? ' · ✅ Confirmada' : ' · ⏳ pendente')) : '—';
+    const editBtn = organizerUnlocked ? `<button class="fin-undo" data-id="${p.id}" data-action="edit-part">✏️ Editar</button>` : '';
+    return `<div class="fin-row" style="align-items:flex-start;">
+      <div class="fr-left" style="max-width:none;flex:1;">
+        <div class="fr-desc" style="max-width:none;white-space:normal;">${escapeHtml(p.nome)}</div>
+        <div class="fr-date">${escapeHtml(p.email||'')}</div>
+        <div style="display:flex;gap:16px;flex-wrap:wrap;margin-top:6px;font-size:11.5px;color:#5c4c3a;">
+          <span>🍽️ Jantar: ${escapeHtml(jantarTxt)}</span>
+          <span>✨ Imersão: ${escapeHtml(imersaoTxt)}</span>
+          <span>🌿 Flow: ${escapeHtml(flowTxt)}</span>
+        </div>
+        ${editBtn}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+document.getElementById('partSearch').addEventListener('input', (e)=>{
+  partSearchTerm = e.target.value;
+  renderParticipantes();
+});
+
+document.getElementById('partList').addEventListener('click', (e)=>{
+  const btn = e.target.closest('button[data-action="edit-part"]');
+  if(!btn) return;
+  openParticipanteModal(parseInt(btn.dataset.id));
+});
+
+function openParticipanteModal(id){
+  editingParticipante = id || null;
+  const p = id ? data.participantes.find(x=>x.id===id) : null;
+  document.getElementById('partModalTitle').textContent = p ? 'Editar participante' : 'Adicionar participante';
+  document.getElementById('partNome').value = p ? p.nome : '';
+  document.getElementById('partEmail').value = p ? (p.email||'') : '';
+  document.getElementById('partJantarCompra').value = p ? (p.jantarCompra||'') : '';
+  document.getElementById('partJantarWhats').value = p && p.jantarWhats ? '1' : '0';
+  document.getElementById('partImersaoCompra').value = p ? (p.imersaoCompra||'') : '';
+  document.getElementById('partImersaoWhats').value = p && p.imersaoWhats ? '1' : '0';
+  document.getElementById('partFlowBonus').value = p && p.flowBonus ? '1' : '0';
+  document.getElementById('partFlowWhats').value = p && p.flowWhats ? '1' : '0';
+  document.getElementById('partDeleteBtn').style.display = p ? 'block' : 'none';
+  document.getElementById('partSaveSuccess').style.display = 'none';
+  document.getElementById('participanteModal').classList.add('show');
+}
+
+document.getElementById('btnAddParticipante').addEventListener('click', ()=> openParticipanteModal(null));
+document.getElementById('partCloseBtn').addEventListener('click', ()=>{
+  document.getElementById('participanteModal').classList.remove('show');
+  editingParticipante = null;
+});
+document.getElementById('partSaveBtn').addEventListener('click', async ()=>{
+  const nome = document.getElementById('partNome').value.trim();
+  if(!nome){ alert('Informe o nome do participante.'); return; }
+  const p = {
+    id: editingParticipante || partNextId++,
+    nome,
+    email: document.getElementById('partEmail').value.trim(),
+    jantarCompra: document.getElementById('partJantarCompra').value,
+    jantarWhats: boolFromWhats(document.getElementById('partJantarWhats').value),
+    imersaoCompra: document.getElementById('partImersaoCompra').value,
+    imersaoWhats: boolFromWhats(document.getElementById('partImersaoWhats').value),
+    flowBonus: boolFromWhats(document.getElementById('partFlowBonus').value),
+    flowWhats: boolFromWhats(document.getElementById('partFlowWhats').value)
+  };
+  await saveParticipante(p);
+  const successEl = document.getElementById('partSaveSuccess');
+  successEl.style.display = 'block';
+  setTimeout(()=>{ successEl.style.display = 'none'; document.getElementById('participanteModal').classList.remove('show'); }, 900);
+});
+document.getElementById('partDeleteBtn').addEventListener('click', async ()=>{
+  if(!editingParticipante) return;
+  if(!confirm('Excluir este participante?')) return;
+  await deleteParticipante(editingParticipante);
+  document.getElementById('participanteModal').classList.remove('show');
+  editingParticipante = null;
+});
+
+document.getElementById('btnImportarParticipantes').addEventListener('click', ()=>{
+  document.getElementById('partImportText').value = '';
+  document.getElementById('partImportSuccess').style.display = 'none';
+  document.getElementById('importParticipantesModal').classList.add('show');
+});
+document.getElementById('partImportClose').addEventListener('click', ()=>{
+  document.getElementById('importParticipantesModal').classList.remove('show');
+});
+document.getElementById('partImportConfirm').addEventListener('click', async ()=>{
+  const text = document.getElementById('partImportText').value;
+  if(!text.trim()) return;
+  const {added, atualizados} = parseBulkParticipantes(text);
+  await saveData();
+  renderParticipantes();
+  renderInicio();
+  const successEl = document.getElementById('partImportSuccess');
+  successEl.textContent = added + ' novo(s) participante(s) adicionado(s), ' + atualizados + ' atualizado(s).';
+  successEl.style.display = 'block';
+});
 
 function renderEventosLista(){
   const t = totals();
