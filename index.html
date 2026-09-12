@@ -2792,24 +2792,44 @@ function renderParticipantes(){
     el.innerHTML = '<div class="fin-empty">' + (data.participantes.length ? 'Nenhum resultado para essa busca.' : 'Nenhum participante cadastrado ainda.') + '</div>';
     return;
   }
-  el.innerHTML = lista.map(p=>{
-    const jantarTxt = p.jantarCompra ? (p.jantarCompra + (p.jantarWhats ? ' · ✅ Confirmada' : ' · ⏳ pendente')) : '—';
-    const imersaoTxt = p.imersaoCompra ? (p.imersaoCompra + (p.imersaoWhats ? ' · ✅ Confirmada' : ' · ⏳ pendente')) : '—';
-    const flowTxt = p.flowBonus ? ('Bônus' + (p.flowWhats ? ' · ✅ Confirmada' : ' · ⏳ pendente')) : '—';
-    const editBtn = organizerUnlocked ? `<button class="fin-undo" data-id="${p.id}" data-action="edit-part">✏️ Editar</button>` : '';
-    return `<div class="fin-row" style="align-items:flex-start;">
-      <div class="fr-left" style="max-width:none;flex:1;">
-        <div class="fr-desc" style="max-width:none;white-space:normal;">${escapeHtml(p.nome)}</div>
-        <div class="fr-date">${escapeHtml(p.email||'')}</div>
-        <div style="display:flex;gap:16px;flex-wrap:wrap;margin-top:6px;font-size:11.5px;color:#5c4c3a;">
-          <span>🍽️ Jantar: ${escapeHtml(jantarTxt)}</span>
-          <span>✨ Imersão: ${escapeHtml(imersaoTxt)}</span>
-          <span>🌿 Flow: ${escapeHtml(flowTxt)}</span>
-        </div>
-        ${editBtn}
-      </div>
+
+  function statusCell(compra, whats, labelSemCompra){
+    if(!compra) return '<span style="color:#c2b494;">'+ (labelSemCompra||'—') +'</span>';
+    return `<div style="display:flex;flex-direction:column;gap:3px;">
+      <span style="font-weight:700;color:var(--ink);">${escapeHtml(compra)}</span>
+      <span class="badge-status ${whats?'ok':'pending'}" style="width:fit-content;">${whats?'✅ Confirmada':'⏳ Pendente'}</span>
     </div>`;
+  }
+
+  const rows = lista.map(p=>{
+    const editBtn = organizerUnlocked ? `<button class="fin-undo" data-id="${p.id}" data-action="edit-part">✏️ Editar</button>` : '—';
+    return `<tr>
+      <td style="font-weight:700;">${escapeHtml(p.nome)}</td>
+      <td style="color:#8a7a63;">${escapeHtml(p.email||'—')}</td>
+      <td>${statusCell(p.jantarCompra, p.jantarWhats)}</td>
+      <td>${statusCell(p.imersaoCompra, p.imersaoWhats)}</td>
+      <td>${statusCell(p.flowBonus ? 'Bônus' : '', p.flowWhats)}</td>
+      <td>${editBtn}</td>
+    </tr>`;
   }).join('');
+
+  el.innerHTML = `
+    <div style="overflow-x:auto;">
+      <table class="simple-table" style="min-width:760px;">
+        <thead style="position:sticky;top:0;background:var(--white);z-index:1;">
+          <tr>
+            <th>Nome</th>
+            <th>E-mail</th>
+            <th>🍽️ Jantar</th>
+            <th>✨ Imersão</th>
+            <th>🌿 Flow</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>
+  `;
 }
 
 document.getElementById('partSearch').addEventListener('input', (e)=>{
