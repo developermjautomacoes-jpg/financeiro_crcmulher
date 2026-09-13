@@ -772,6 +772,7 @@
     border:1px solid var(--line);
   }
   .lock-badge.unlocked{background:#E4F3E9;color:#2E7D4F;border-color:#c7e6d2;}
+  .lock-badge.error{background:#FBE7E7;color:#B23A3A;border-color:#f0c9c9;font-weight:800;}
   .bell{
     position:relative;
     width:38px;height:38px;
@@ -999,6 +1000,7 @@
         </div>
       </div>
       <div class="topbar-right">
+        <div class="lock-badge" id="storageHealthBadge" style="display:none;">🟢 Dados sincronizados</div>
         <div class="bell">🔔<span class="badge" id="bellBadge">0</span></div>
         <div class="lock-badge" id="lockBadge">🔒 Somente leitura</div>
       </div>
@@ -1818,9 +1820,27 @@
           </div>
         </div>
 
+        <div class="panel" style="margin-bottom:18px;">
+          <div class="panel-body" style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;justify-content:space-between;">
+            <div style="display:flex;gap:10px;flex-wrap:wrap;flex:1;min-width:260px;">
+              <input type="text" id="mensSearch" placeholder="Buscar por nome..." style="flex:1;min-width:180px;padding:11px 13px;border:1.5px solid var(--line);border-radius:10px;font-size:14px;background:var(--cream);font-family:'Inter',sans-serif;">
+              <select id="mensFiltroStatus" style="padding:11px 13px;border:1.5px solid var(--line);border-radius:10px;font-size:13px;background:var(--cream);font-family:'Inter',sans-serif;">
+                <option value="">Status: todos</option>
+                <option value="pago">✅ Pagou</option>
+                <option value="pendente">⏳ Pendente</option>
+                <option value="atrasado">⚠️ Atrasado</option>
+              </select>
+            </div>
+            <button class="btn-secondary" id="btnExportarMensalidades">📊 Exportar planilha</button>
+          </div>
+        </div>
+
         <div class="panel">
-          <div class="panel-head"><h3>Membros da comissão</h3><span id="mensMembrosCount" style="font-size:11.5px;color:#9a8a72;"></span></div>
-          <div class="panel-body" id="mensMembrosList"></div>
+          <div class="panel-head" style="background:linear-gradient(120deg,var(--burgundy),#9C3763);">
+            <h3 style="color:var(--white);">Membros da comissão</h3>
+            <span id="mensMembrosCount" style="font-size:11.5px;color:rgba(255,255,255,0.85);"></span>
+          </div>
+          <div class="panel-body" id="mensMembrosList" style="padding:0;"></div>
         </div>
       </div>
 
@@ -2078,6 +2098,24 @@
 
 <!-- MODAL: VISUALIZAR / EDITAR LANÇAMENTO -->
 <!-- MODAL: NOVA CONTA A PAGAR -->
+<!-- MODAL: MARCAR PAGAMENTO DE MENSALIDADE -->
+<div class="overlay" id="mensalidadeModal">
+  <div class="modal" style="max-width:440px;">
+    <h3>Registrar pagamento</h3>
+    <p class="hint" style="margin-top:0;" id="mensModalMembroNome"></p>
+    <label>Data do pagamento</label>
+    <input type="date" id="mensPagData">
+    <label>Quantos meses esse pagamento cobre?</label>
+    <input type="number" min="1" step="1" id="mensPagMeses" value="1">
+    <p class="hint">Se a pessoa adiantou, por exemplo, 3 meses de uma vez, coloque 3 — o sistema marca este mês e os próximos automaticamente como pagos.</p>
+    <label>Valor por mês (R$)</label>
+    <input type="number" min="0" step="0.01" id="mensPagValor" value="50">
+    <button class="primary" id="mensPagSalvarBtn" style="margin-top:16px;">Registrar pagamento</button>
+    <div class="success" id="mensPagSuccess">Pagamento registrado!</div>
+    <button class="secondary" id="mensPagFecharBtn">Fechar</button>
+  </div>
+</div>
+
 <div class="overlay" id="novaContaPagarModal">
   <div class="modal" style="max-width:460px;">
     <h3>Nova conta a pagar</h3>
@@ -2149,18 +2187,29 @@
 const ADMIN_PIN = '2609';
 // ================= ARMAZENAMENTO (API própria na Vercel, substitui window.storage) =================
 async function apiStorageGet(key){
-  const res = await fetch('/api/storage?key=' + encodeURIComponent(key));
-  if(!res.ok) return null;
+  let res;
+  try{
+    res = await fetch('/api/storage?key=' + encodeURIComponent(key));
+  }catch(networkErr){
+    throw new Error('Falha de conexão ao buscar dados salvos.');
+  }
+  if(!res.ok) throw new Error('O servidor não conseguiu buscar os dados salvos (status '+res.status+'). Verifique se o banco de dados (Vercel KV) está conectado a este ambiente.');
   const json = await res.json();
   return json.value ? { value: json.value } : null;
 }
 async function apiStorageSet(key, value){
-  const res = await fetch('/api/storage', {
-    method: 'POST',
-    headers: {'Content-Type':'application/json'},
-    body: JSON.stringify({ key, value })
-  });
-  return res.ok;
+  let res;
+  try{
+    res = await fetch('/api/storage', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ key, value })
+    });
+  }catch(networkErr){
+    throw new Error('Falha de conexão ao salvar os dados.');
+  }
+  if(!res.ok) throw new Error('O servidor não conseguiu salvar os dados (status '+res.status+'). Verifique se o banco de dados (Vercel KV) está conectado a este ambiente.');
+  return true;
 }
 
 const PRICE_JANTAR = 200;
@@ -2173,6 +2222,22 @@ const TOTAL_IMERSAO = 200;
 
 const DEFAULTS = { entries: [], confirmed: {jantar:0, imersao:0, flow:0}, lastUpdated: null, weeks: [], participantes: [] };
 let data = JSON.parse(JSON.stringify(DEFAULTS));
+
+let storageHealthOK = true;
+function atualizarIndicadorSaude(){
+  const badge = document.getElementById('storageHealthBadge');
+  if(!badge) return;
+  badge.style.display = 'flex';
+  if(storageHealthOK){
+    badge.textContent = '🟢 Dados sincronizados';
+    badge.classList.remove('error');
+    badge.classList.add('unlocked');
+  }else{
+    badge.textContent = '🔴 Falha ao salvar/carregar';
+    badge.classList.remove('unlocked');
+    badge.classList.add('error');
+  }
+}
 
 async function loadData(){
   try{
@@ -2190,22 +2255,29 @@ async function loadData(){
       }
     }
   }catch(e){
+    console.error('Erro ao carregar dados de eventos', e);
     data = JSON.parse(JSON.stringify(DEFAULTS));
+    storageHealthOK = false;
+    alert('⚠️ Não consegui carregar os dados salvos de Eventos. A tela pode aparecer vazia mesmo que os dados existam — NÃO edite nada até resolver isso, ou risca sobrescrever o que já está salvo.');
   }
   if(!data.participantes) data.participantes = [];
   const partIds = data.participantes.map(p=>p.id||0);
   partNextId = partIds.length ? Math.max(...partIds)+1 : 1;
   render();
   document.getElementById('loading').style.display = 'none';
+  atualizarIndicadorSaude();
 }
 
 async function saveData(){
   try{
     await apiStorageSet('vendas', JSON.stringify(data));
+    storageHealthOK = true;
   }catch(e){
     console.error('Erro ao salvar', e);
-    alert('Não foi possível salvar agora. Verifique sua conexão e tente novamente.');
+    storageHealthOK = false;
+    alert('❌ Não foi possível salvar agora. O que você acabou de fazer NÃO foi guardado — se atualizar a página agora, vai perder essa alteração.');
   }
+  atualizarIndicadorSaude();
 }
 
 function todayISO(){
@@ -2658,20 +2730,27 @@ async function loadFinData(){
       finData = Object.assign(JSON.parse(JSON.stringify(FIN_DEFAULTS)), parsed);
     }
   }catch(e){
+    console.error('Erro ao carregar dados financeiros', e);
     finData = JSON.parse(JSON.stringify(FIN_DEFAULTS));
+    storageHealthOK = false;
+    alert('⚠️ Não consegui carregar os dados salvos do Financeiro. A tela pode aparecer vazia mesmo que os dados existam — NÃO edite nada até resolver isso, ou risca sobrescrever o que já está salvo.');
   }
   const allIds = [...finData.extrato, ...finData.ledger, ...(finData.mensalidades||[]), ...(finData.membros||[])].map(x=>x.id||0);
   finNextId = allIds.length ? Math.max(...allIds)+1 : 1;
   renderFinanceiro();
+  atualizarIndicadorSaude();
 }
 
 async function saveFinData(){
   try{
     await apiStorageSet('financeiro', JSON.stringify(finData));
+    storageHealthOK = true;
   }catch(e){
     console.error('Erro ao salvar financeiro', e);
-    alert('Não foi possível salvar agora. Verifique sua conexão e tente novamente.');
+    storageHealthOK = false;
+    alert('❌ Não foi possível salvar agora. O que você acabou de fazer NÃO foi guardado — se atualizar a página agora, vai perder essa alteração.');
   }
+  atualizarIndicadorSaude();
 }
 
 function parseBRNumber(raw){
@@ -3165,6 +3244,8 @@ async function undoMatch(kind, id){
   if(item.groupId){
     // conciliação manual em grupo: desfaz todo o grupo
     const gid = item.groupId;
+    const tamanhoGrupo = finData.ledger.filter(l=>l.groupId===gid).length + finData.extrato.filter(e=>e.groupId===gid).length;
+    if(!confirm('Este item faz parte de uma conciliação manual em grupo, com '+tamanhoGrupo+' lançamento(s) juntos. Desfazer vai liberar o GRUPO INTEIRO, não só este item. Confirmar?')) return;
     finData.ledger.forEach(l=>{ if(l.groupId===gid){ l.matched=false; l.groupId=null; l.matchedExtratoId=null; } });
     finData.extrato.forEach(e=>{ if(e.groupId===gid){ e.matched=false; e.groupId=null; e.matchedLedgerId=null; } });
   }else if(kind==='ledger'){
@@ -3739,6 +3820,31 @@ function autoDetectMensalidades(mes, valorAlvo){
   return detectados;
 }
 
+let mensSearchTerm = '';
+let mensFiltroStatus = '';
+let mensPagamentoMembroAtual = null;
+
+function getUltimoMesPagoConsecutivo(membroNome){
+  let mes = mesAtualKey();
+  let ultimoPago = null;
+  let iteracoes = 0;
+  while(iteracoes < 60){ // trava de segurança (5 anos pra frente)
+    const reg = getMensalidade(membroNome, mes);
+    if(reg && reg.pago){ ultimoPago = mes; mes = shiftMes(mes, 1); iteracoes++; }
+    else break;
+  }
+  return ultimoPago;
+}
+
+function mensalidadePassaFiltro(r, hoje, vencimento){
+  const atrasado = !r.pago && hoje > vencimento;
+  if(mensFiltroStatus==='pago' && !r.pago) return false;
+  if(mensFiltroStatus==='pendente' && (r.pago || atrasado)) return false;
+  if(mensFiltroStatus==='atrasado' && !atrasado) return false;
+  if(mensSearchTerm && !r.membro.toLowerCase().includes(mensSearchTerm.toLowerCase())) return false;
+  return true;
+}
+
 function renderMensalidades(){
   document.getElementById('mesAtualLabel').textContent = mesLabel(mensalidadesMes);
   document.getElementById('autoDetectRow').style.display = organizerUnlocked ? 'flex' : 'none';
@@ -3747,49 +3853,119 @@ function renderMensalidades(){
   let pagaramCount = 0, arrecadado = 0;
   const hoje = todayISOFin();
   const vencimento = mensalidadesMes + '-05';
-  const rows = membros.map(m=>{
+  const allRows = membros.map(m=>{
     const reg = getMensalidade(m.nome, mensalidadesMes);
     const pago = reg ? reg.pago : false;
     if(pago){ pagaramCount++; arrecadado += (reg.valor || VALOR_MENSALIDADE); }
-    return {membro:m.nome, reg, pago};
+    const ultimoMesPago = getUltimoMesPagoConsecutivo(m.nome);
+    return {membro:m.nome, reg, pago, ultimoMesPago};
   });
 
   document.getElementById('mensPagaramCount').textContent = pagaramCount + ' / ' + membros.length;
-  const atrasados = rows.filter(r=>!r.pago && hoje > vencimento).length;
+  const atrasados = allRows.filter(r=>!r.pago && hoje > vencimento).length;
   document.getElementById('mensPendentesCount').textContent = (membros.length - pagaramCount) + (hoje > vencimento ? ' ('+atrasados+' atrasado(s))' : '');
   document.getElementById('mensArrecadado').textContent = fmtBRLFin(arrecadado);
-  document.getElementById('mensMembrosCount').textContent = membros.length + ' membros';
+
+  const rows = allRows.filter(r=>mensalidadePassaFiltro(r, hoje, vencimento));
+  document.getElementById('mensMembrosCount').textContent = rows.length + ' de ' + membros.length;
 
   const el = document.getElementById('mensMembrosList');
   if(!membros.length){
-    el.innerHTML = '<div class="fin-empty">Cadastre membros em "Membros da Comissão" para começar a controlar as mensalidades.</div>';
+    el.innerHTML = '<div class="fin-empty" style="padding:20px;">Cadastre membros em "Membros da Comissão" para começar a controlar as mensalidades.</div>';
     return;
   }
-  el.innerHTML = rows.map(r=>{
-    const dataTxt = r.reg && r.reg.dataPagamento ? (()=>{ const [y,m,d]=r.reg.dataPagamento.split('-'); return d+'/'+m+'/'+y; })() : '';
-    const autoTag = r.reg && r.reg.auto ? ' · detectado automaticamente' : '';
+  if(!rows.length){
+    el.innerHTML = '<div class="fin-empty" style="padding:20px;">Nenhum resultado para esse filtro.</div>';
+    return;
+  }
+
+  const rowsHtml = rows.map(r=>{
+    const dataTxt = r.reg && r.reg.dataPagamento ? (()=>{ const [y,m,d]=r.reg.dataPagamento.split('-'); return d+'/'+m+'/'+y; })() : '—';
+    const autoTag = r.reg && r.reg.auto ? ' (auto)' : '';
     const atrasado = !r.pago && hoje > vencimento;
-    const toggleBtn = organizerUnlocked
-      ? `<button class="fin-undo" data-membro="${escapeHtml(r.membro)}" data-action="toggle-mens">${r.pago ? 'marcar como pendente' : 'marcar como pago'}</button>`
-      : '';
-    return `<div class="fin-row">
-      <div class="fr-left">
-        <div class="fr-desc">${escapeHtml(r.membro)}</div>
-        <div class="fr-date">${r.pago ? ('Pago em '+dataTxt+autoTag) : (atrasado ? 'Atrasado (venceu dia 5)' : 'Ainda não pagou')}</div>
-        ${toggleBtn}
-      </div>
-      <div class="fr-right">
-        <span class="badge-status ${r.pago?'ok':'pending'}">${r.pago?'✅ Pago':(atrasado?'⚠️ Atrasado':'⏳ Pendente')}</span>
-      </div>
-    </div>`;
+    const statusHtml = `<span class="badge-status ${r.pago?'ok':'pending'}">${r.pago?'✅ Pago':(atrasado?'⚠️ Atrasado':'⏳ Pendente')}</span>`;
+    const saldoTxt = r.ultimoMesPago && r.ultimoMesPago !== mesAtualKey()
+      ? ('Adiantado até '+mesLabel(r.ultimoMesPago))
+      : (r.ultimoMesPago ? 'Em dia' : '—');
+    const actionBtns = organizerUnlocked
+      ? `<button class="icon-btn" data-membro="${escapeHtml(r.membro)}" data-action="registrar-pagamento" title="Registrar pagamento">💳</button>
+         ${r.pago ? '<button class="icon-btn danger" data-membro="'+escapeHtml(r.membro)+'" data-action="remover-pagamento" title="Remover pagamento deste mês">🗑️</button>' : ''}`
+      : '—';
+    return `<tr>
+      <td style="font-weight:700;">${escapeHtml(r.membro)}</td>
+      <td>${statusHtml}</td>
+      <td style="color:#8a7a63;">${dataTxt}${autoTag}</td>
+      <td style="color:#8a7a63;">${escapeHtml(saldoTxt)}</td>
+      <td style="white-space:nowrap;">${actionBtns}</td>
+    </tr>`;
   }).join('');
+
+  el.innerHTML = `
+    <div style="overflow-x:auto;">
+      <table class="simple-table" style="min-width:640px;">
+        <thead style="position:sticky;top:0;background:var(--white);z-index:1;">
+          <tr><th>Nome</th><th>Status (${escapeHtml(mesLabel(mensalidadesMes))})</th><th>Pago em</th><th>Situação</th><th></th></tr>
+        </thead>
+        <tbody>${rowsHtml}</tbody>
+      </table>
+    </div>
+  `;
 }
 
+document.getElementById('mensSearch').addEventListener('input', (e)=>{ mensSearchTerm = e.target.value; renderMensalidades(); });
+document.getElementById('mensFiltroStatus').addEventListener('change', (e)=>{ mensFiltroStatus = e.target.value; renderMensalidades(); });
+
 document.getElementById('mensMembrosList').addEventListener('click', (e)=>{
-  const btn = e.target.closest('button[data-action="toggle-mens"]');
+  const btn = e.target.closest('button.icon-btn');
   if(!btn) return;
-  toggleMensalidade(btn.dataset.membro, mensalidadesMes);
+  const membro = btn.dataset.membro;
+  const action = btn.dataset.action;
+  if(action==='registrar-pagamento') openMensalidadeModal(membro);
+  else if(action==='remover-pagamento'){
+    if(confirm('Remover o pagamento de "'+membro+'" para '+mesLabel(mensalidadesMes)+'?')) toggleMensalidade(membro, mensalidadesMes);
+  }
 });
+
+function openMensalidadeModal(membroNome){
+  mensPagamentoMembroAtual = membroNome;
+  document.getElementById('mensModalMembroNome').textContent = membroNome + ' — a partir de ' + mesLabel(mensalidadesMes);
+  document.getElementById('mensPagData').value = todayISOFin();
+  document.getElementById('mensPagMeses').value = 1;
+  document.getElementById('mensPagValor').value = VALOR_MENSALIDADE;
+  document.getElementById('mensPagSuccess').style.display = 'none';
+  document.getElementById('mensalidadeModal').classList.add('show');
+}
+document.getElementById('mensPagFecharBtn').addEventListener('click', ()=>{
+  document.getElementById('mensalidadeModal').classList.remove('show');
+  mensPagamentoMembroAtual = null;
+});
+document.getElementById('mensPagSalvarBtn').addEventListener('click', async ()=>{
+  if(!mensPagamentoMembroAtual) return;
+  const dataPag = document.getElementById('mensPagData').value || todayISOFin();
+  const meses = Math.max(1, parseInt(document.getElementById('mensPagMeses').value) || 1);
+  const valorMes = parseFloat(document.getElementById('mensPagValor').value) || VALOR_MENSALIDADE;
+  let mesCursor = mensalidadesMes;
+  for(let i=0;i<meses;i++){
+    const existing = getMensalidade(mensPagamentoMembroAtual, mesCursor);
+    if(existing){
+      existing.pago = true;
+      existing.dataPagamento = dataPag;
+      existing.valor = valorMes;
+      existing.auto = false;
+    }else{
+      finData.mensalidades.push({id: finNextId++, membro:mensPagamentoMembroAtual, mes:mesCursor, pago:true, dataPagamento:dataPag, valor:valorMes, auto:false});
+    }
+    mesCursor = shiftMes(mesCursor, 1);
+  }
+  await saveFinData();
+  renderMensalidades();
+  renderMembros();
+  const successEl = document.getElementById('mensPagSuccess');
+  successEl.textContent = meses>1 ? ('Pagamento registrado para '+meses+' meses!') : 'Pagamento registrado!';
+  successEl.style.display = 'block';
+  setTimeout(()=>{ successEl.style.display = 'none'; document.getElementById('mensalidadeModal').classList.remove('show'); mensPagamentoMembroAtual = null; }, 1100);
+});
+
 document.getElementById('mesAnterior').addEventListener('click', ()=>{ mensalidadesMes = shiftMes(mensalidadesMes, -1); renderMensalidades(); renderMembros(); });
 document.getElementById('mesProximo').addEventListener('click', ()=>{ mensalidadesMes = shiftMes(mensalidadesMes, 1); renderMensalidades(); renderMembros(); });
 document.getElementById('btnAutoDetectMensalidade').addEventListener('click', async ()=>{
@@ -3800,6 +3976,92 @@ document.getElementById('btnAutoDetectMensalidade').addEventListener('click', as
   renderMembros();
   alert(n>0 ? (n+' pagamento(s) detectado(s) automaticamente no extrato.') : 'Nenhum pagamento novo de '+fmtBRLFin(valorAlvo)+' encontrado no extrato para este mês.');
 });
+
+async function exportarMensalidadesExcel(){
+  const btn = document.getElementById('btnExportarMensalidades');
+  const textoOriginal = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = 'Gerando...';
+  try{
+    await loadExcelJS();
+    const hoje = todayISOFin();
+    const vencimento = mensalidadesMes + '-05';
+    const lista = finData.membros.map(m=>{
+      const reg = getMensalidade(m.nome, mensalidadesMes);
+      const pago = reg ? reg.pago : false;
+      const ultimoMesPago = getUltimoMesPagoConsecutivo(m.nome);
+      return {membro:m.nome, reg, pago, ultimoMesPago};
+    }).filter(r=>mensalidadePassaFiltro(r, hoje, vencimento));
+
+    const wb = new ExcelJS.Workbook();
+    const ws = wb.addWorksheet('Mensalidades');
+    ws.columns = [{width:34},{width:16},{width:16},{width:26}];
+    const crcId = wb.addImage({ base64: LOGO_CRC_DATAURI, extension:'png' });
+    const mulherId = wb.addImage({ base64: LOGO_MULHER_DATAURI, extension:'png' });
+    const neekoId = wb.addImage({ base64: LOGO_NEEKO_DATAURI, extension:'png' });
+    ws.addImage(crcId, 'A1:B3');
+    ws.addImage(mulherId, 'B1:C3');
+    ws.addImage(neekoId, 'C1:D3');
+    ws.getRow(1).height = 24; ws.getRow(2).height = 24; ws.getRow(3).height = 24;
+
+    ws.mergeCells('A4:D4');
+    const titleCell = ws.getCell('A4');
+    titleCell.value = 'Relatório de Mensalidades — ' + mesLabel(mensalidadesMes);
+    titleCell.font = { bold:true, size:13, color:{argb:'FFFFFFFF'} };
+    titleCell.fill = { type:'pattern', pattern:'solid', fgColor:{argb:'FF7A2048'} };
+    titleCell.alignment = { horizontal:'center', vertical:'middle' };
+    ws.getRow(4).height = 28;
+
+    ws.mergeCells('A5:D5');
+    const subCell = ws.getCell('A5');
+    subCell.value = 'Gerado em ' + new Date().toLocaleDateString('pt-BR') + ' · ' + lista.length + ' membro(s)';
+    subCell.font = { italic:true, size:10, color:{argb:'FF8A7A63'} };
+    subCell.alignment = { horizontal:'center' };
+    ws.getRow(5).height = 18;
+
+    const headerRowIdx = 7;
+    ['Nome', 'Status', 'Pago em', 'Situação'].forEach((h,i)=>{
+      const cell = ws.getRow(headerRowIdx).getCell(i+1);
+      cell.value = h;
+      cell.font = { bold:true, color:{argb:'FF5A1735'} };
+      cell.fill = { type:'pattern', pattern:'solid', fgColor:{argb:'FFE8CE7B'} };
+      cell.alignment = { horizontal:'center', vertical:'middle' };
+    });
+    ws.getRow(headerRowIdx).height = 26;
+
+    lista.forEach((r, idx)=>{
+      const row = ws.getRow(headerRowIdx + 1 + idx);
+      row.getCell(1).value = r.membro;
+      row.getCell(2).value = r.pago ? 'Pago' : 'Pendente';
+      row.getCell(3).value = r.reg && r.reg.dataPagamento ? r.reg.dataPagamento.split('-').reverse().join('/') : '';
+      row.getCell(4).value = r.ultimoMesPago && r.ultimoMesPago !== mesAtualKey() ? ('Adiantado até '+mesLabel(r.ultimoMesPago)) : (r.ultimoMesPago ? 'Em dia' : '');
+      const bg = idx % 2 === 0 ? 'FFFBF5EA' : 'FFFFFFFF';
+      for(let c=1;c<=4;c++){
+        row.getCell(c).fill = { type:'pattern', pattern:'solid', fgColor:{argb:bg} };
+        row.getCell(c).border = { bottom:{style:'thin', color:{argb:'FFE7DBC4'}} };
+      }
+      row.getCell(2).font = { bold:true, color:{argb: r.pago ? 'FF2E7D4F' : 'FFB8912F'} };
+    });
+
+    const buffer = await wb.xlsx.writeBuffer();
+    const blob = new Blob([buffer], {type:'application/octet-stream'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'mensalidades-crces-mulher-' + mensalidadesMes + '.xlsx';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  }catch(err){
+    console.error(err);
+    alert('Não consegui gerar a planilha agora. Verifique sua conexão e tente novamente.');
+  }finally{
+    btn.disabled = false;
+    btn.textContent = textoOriginal;
+  }
+}
+document.getElementById('btnExportarMensalidades').addEventListener('click', exportarMensalidadesExcel);
 
 // ================= PARTICIPANTES =================
 function normalizeNome(s){
@@ -5288,9 +5550,12 @@ document.getElementById('importBtnAll').addEventListener('click', async ()=>{
 
 // ================= ATUALIZAÇÃO AUTOMÁTICA (pra quem só visualiza) =================
 // A cada 40s, busca os dados mais recentes salvos por outra pessoa e atualiza a tela.
-// Não mexe em formulários abertos — só refaz as listas e números.
+// Só roda pra quem está só visualizando (não desbloqueou), pra nunca sobrescrever uma
+// edição em andamento com dados antigos do servidor.
 setInterval(async ()=>{
   if(document.visibilityState !== 'visible') return;
+  if(organizerUnlocked) return; // quem está editando não sofre atualização automática por cima
+  if(!storageHealthOK) return; // se já sabemos que salvar/carregar está falhando, não arrisca sobrescrever
   try{
     await loadData();
     await loadFinData();
