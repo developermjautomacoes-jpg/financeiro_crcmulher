@@ -1906,6 +1906,14 @@
             <div id="saldoInicialList"></div>
           </div>
         </div>
+
+        <div class="panel" style="max-width:640px;margin-top:18px;" id="recalcularContasPanel">
+          <div class="panel-head"><h3>Corrigir contas do extrato já importado</h3></div>
+          <div class="panel-body">
+            <p class="hint" style="margin-top:0;">Se você já importou o extrato antes de cadastrar todas as contas/cofrinhos, ou percebeu que uma transferência foi pro cofrinho errado (por exemplo, "Cofrinho CRC Mulher" e "Cofrinho Jantar CRC Mulher" sendo confundidos), use este botão para reclassificar tudo de novo, sem precisar reimportar.</p>
+            <button class="btn-secondary" id="btnRecalcularContas" style="display:none;">🔄 Recalcular contas automaticamente</button>
+          </div>
+        </div>
       </div>
       <div class="page" id="page-relatorios">
         <div class="stub-page">
@@ -2811,11 +2819,29 @@ function classifyPicPayTipo(tipo){
 function detectContaFromTexto(origemTexto){
   const contas = (finData && finData.contas) ? finData.contas : DEFAULT_CONTAS;
   const textoNorm = normalizeNome(origemTexto);
-  for(const conta of contas){
+  // ordena do nome mais específico (mais longo) pro mais genérico, pra evitar que um nome
+  // mais curto (ex: "Cofrinho CRC Mulher") capture por engano um texto que na verdade
+  // pertence a um nome mais longo que o contém (ex: "Cofrinho Jantar CRC Mulher")
+  const contasOrdenadas = [...contas].sort((a,b)=> b.length - a.length);
+  for(const conta of contasOrdenadas){
     const chave = normalizeNome(conta.replace(/^cofrinho\s+/i,'').replace(/^conta\s+/i,''));
     if(chave && textoNorm.includes(chave)) return conta;
   }
   return contas.find(c=>/picpay/i.test(c)) || contas[0] || 'Conta PICPAY';
+}
+
+async function recalcularContasExtrato(){
+  let alterados = 0;
+  finData.extrato.forEach(e=>{
+    if(e.category !== 'transferencia') return;
+    const novaConta = detectContaFromTexto(e.description);
+    if(novaConta !== e.conta){ e.conta = novaConta; alterados++; }
+  });
+  await saveFinData();
+  renderFinanceiro();
+  alert(alterados > 0
+    ? (alterados+' lançamento(s) tiveram a conta corrigida automaticamente.')
+    : 'Nenhuma correção foi necessária — as contas já estavam certas.');
 }
 
 function processPicPayRows(rows, headers){
@@ -4555,14 +4581,21 @@ function lancPassaFiltros(r){
   return true;
 }
 
+function preencherSelectPreservandoValor(sel, optionsHtml){
+  if(!sel) return;
+  const valorAtual = sel.value;
+  sel.innerHTML = optionsHtml;
+  if([...sel.options].some(o=>o.value===valorAtual)) sel.value = valorAtual;
+}
+
 function popularFiltrosLancamentos(){
   const catSel = document.getElementById('lancFiltroCategoria');
   const contaSel = document.getElementById('lancFiltroConta');
   const bulkCat = document.getElementById('lancBulkCategoria');
   const bulkConta = document.getElementById('lancBulkConta');
   const todasCat = [...finData.categoriasReceita, ...finData.categoriasDespesa];
-  if(catSel && catSel.options.length <= 1) catSel.innerHTML = '<option value="">Categoria: todas</option>' + todasCat.map(c=>`<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('');
-  if(contaSel && contaSel.options.length <= 1) contaSel.innerHTML = '<option value="">Conta: todas</option>' + finData.contas.map(c=>`<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('');
+  preencherSelectPreservandoValor(catSel, '<option value="">Categoria: todas</option>' + todasCat.map(c=>`<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join(''));
+  preencherSelectPreservandoValor(contaSel, '<option value="">Conta: todas</option>' + finData.contas.map(c=>`<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join(''));
   if(bulkCat) bulkCat.innerHTML = '<option value="">Categoria...</option>' + todasCat.map(c=>`<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('');
   if(bulkConta) bulkConta.innerHTML = '<option value="">Conta...</option>' + finData.contas.map(c=>`<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('');
 }
@@ -4854,9 +4887,7 @@ function contaPagarPassaFiltros(l){
 
 function renderContasPagar(){
   const catSel = document.getElementById('contasPagarFiltroCategoria');
-  if(catSel && catSel.options.length <= 1){
-    catSel.innerHTML = '<option value="">Categoria: todas</option>' + finData.categoriasDespesa.map(c=>`<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('');
-  }
+  preencherSelectPreservandoValor(catSel, '<option value="">Categoria: todas</option>' + finData.categoriasDespesa.map(c=>`<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join(''));
   document.getElementById('btnNovaContaPagar').style.display = organizerUnlocked ? 'inline-block' : 'none';
 
   const contas = getContasAPagar().filter(contaPagarPassaFiltros);
@@ -5067,13 +5098,9 @@ function concPassaFiltros(e){
 function popularFiltrosConciliacao(){
   const contaSel = document.getElementById('concFiltroConta');
   const catSel = document.getElementById('concFiltroCategoria');
-  if(contaSel && contaSel.options.length <= 1){
-    contaSel.innerHTML = '<option value="">Conta: todas</option>' + finData.contas.map(c=>`<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('');
-  }
-  if(catSel && catSel.options.length <= 1){
-    const todas = [...finData.categoriasReceita, ...finData.categoriasDespesa];
-    catSel.innerHTML = '<option value="">Categoria: todas</option>' + todas.map(c=>`<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('');
-  }
+  preencherSelectPreservandoValor(contaSel, '<option value="">Conta: todas</option>' + finData.contas.map(c=>`<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join(''));
+  const todas = [...finData.categoriasReceita, ...finData.categoriasDespesa];
+  preencherSelectPreservandoValor(catSel, '<option value="">Categoria: todas</option>' + todas.map(c=>`<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join(''));
   const bulkCat = document.getElementById('concBulkCategoria');
   const bulkConta = document.getElementById('concBulkConta');
   if(bulkCat) bulkCat.innerHTML = '<option value="">Categoria...</option>' + [...finData.categoriasReceita, ...finData.categoriasDespesa].map(c=>`<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('');
@@ -5331,6 +5358,8 @@ function renderCategoriasEContas(){
   });
   popularSelectsDeCategoriaEConta();
   renderSaldoInicialList();
+  const btnRecalc = document.getElementById('btnRecalcularContas');
+  if(btnRecalc) btnRecalc.style.display = organizerUnlocked ? 'inline-block' : 'none';
 }
 
 function renderSaldoInicialList(){
@@ -5386,6 +5415,10 @@ async function addChipItem(listKey, inputId){
 }
 
 document.getElementById('contasAddBtn').addEventListener('click', ()=> addChipItem('contas','contasNovoInput'));
+document.getElementById('btnRecalcularContas').addEventListener('click', async ()=>{
+  if(!confirm('Isso vai reclassificar a conta de todos os lançamentos de transferência interna do extrato importado, com base no nome de cada cofrinho cadastrado. Continuar?')) return;
+  await recalcularContasExtrato();
+});
 document.getElementById('contasNovoInput').addEventListener('keydown', (e)=>{ if(e.key==='Enter') addChipItem('contas','contasNovoInput'); });
 document.getElementById('catReceitaAddBtn').addEventListener('click', ()=> addChipItem('categoriasReceita','catReceitaNovoInput'));
 document.getElementById('catReceitaNovoInput').addEventListener('keydown', (e)=>{ if(e.key==='Enter') addChipItem('categoriasReceita','catReceitaNovoInput'); });
