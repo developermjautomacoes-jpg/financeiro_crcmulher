@@ -1542,7 +1542,7 @@
         <div class="kpi-row">
           <div class="kpi-card c4">
             <div class="kpi-ico">🏦</div>
-            <div><div class="kpi-lbl">Saldo Atual</div><div class="kpi-val" id="finKpiSaldo">R$ 0</div></div>
+            <div><div class="kpi-lbl">Saldo Atual</div><div class="kpi-val" id="finKpiSaldo">R$ 0</div><div style="font-size:10px;color:#9a8a72;margin-top:2px;">com saldo inicial</div></div>
           </div>
           <div class="kpi-card c2">
             <div class="kpi-ico">⬆️</div>
@@ -1554,7 +1554,7 @@
           </div>
           <div class="kpi-card c1">
             <div class="kpi-ico">✅</div>
-            <div><div class="kpi-lbl">Resultado</div><div class="kpi-val" id="finKpiResultado">R$ 0</div></div>
+            <div><div class="kpi-lbl">Resultado</div><div class="kpi-val" id="finKpiResultado">R$ 0</div><div style="font-size:10px;color:#9a8a72;margin-top:2px;">entradas − saídas do período</div></div>
           </div>
         </div>
 
@@ -4489,17 +4489,27 @@ function renderSaldosPorConta(){
   if(!contas.length){ el.innerHTML = '<div class="hint" style="margin:0;">Cadastre contas em Contas Bancárias para acompanhar o saldo de cada uma.</div>'; return; }
   el.innerHTML = contas.map(c=>{
     const v = saldos[c] || 0;
-    return `<div class="saldo-conta-card">
+    return `<div class="saldo-conta-card" data-conta="${escapeHtml(c)}" style="cursor:pointer;" title="Ver extrato desta conta">
       <div class="nome">${escapeHtml(c)}</div>
       <div class="valor">${fmtBRLFin(v)}</div>
+      <div style="font-size:10.5px;color:var(--burgundy);font-weight:700;margin-top:6px;">Ver extrato →</div>
     </div>`;
   }).join('');
+  el.querySelectorAll('.saldo-conta-card').forEach(card=>{
+    card.addEventListener('click', ()=>{
+      concFiltroConta = card.dataset.conta;
+      const sel = document.getElementById('concFiltroConta');
+      if(sel) sel.value = concFiltroConta;
+      navigateTo('fin-conciliacao');
+    });
+  });
 }
 
 function renderFinVisao(){
   renderSaldosPorConta();
   const fa = finAggregates();
-  document.getElementById('finKpiSaldo').textContent = fmtBRLFin(fa.saldo);
+  const saldoTotalContas = Object.values(computeSaldosPorConta()).reduce((s,v)=>s+v, 0);
+  document.getElementById('finKpiSaldo').textContent = fmtBRLFin(saldoTotalContas);
   document.getElementById('finKpiEntradas').textContent = fmtBRLFin(fa.totalReceitasExtrato);
   document.getElementById('finKpiSaidas').textContent = fmtBRLFin(fa.totalDespesasExtrato);
   document.getElementById('finKpiResultado').textContent = fmtBRLFin(fa.totalReceitasExtrato - fa.totalDespesasExtrato);

@@ -5,9 +5,16 @@ dados guardados de verdade num banco de dados (não depende do Claude para
 funcionar depois de publicado).
 
 ## O que tem aqui
-- `index.html` — o app inteiro (Início, Eventos, Financeiro, Mensalidades etc.)
-- `api/storage.js` — a "gaveta" onde os dados ficam guardados
-- `package.json` — lista o banco de dados que o site usa (Vercel KV)
+- `index.html` — o app inteiro (Início, Eventos, Financeiro, Membros, Mensalidades etc.)
+- `api/storage.js` — a "gaveta" onde os dados ficam guardados (Redis via Upstash)
+- `package.json` — lista a biblioteca que o site usa para falar com o banco
+
+## Aviso importante (atualizado)
+A Vercel **descontinuou o produto "Vercel KV"** em dezembro de 2024. Hoje
+esse tipo de banco de dados se instala pelo **Marketplace** da Vercel, com um
+parceiro chamado **Upstash**. Se você (ou alguém) seguiu um passo a passo
+antigo mencionando "Vercel KV", é por isso que as telas não bateram — o
+código deste pacote já está atualizado para o caminho atual.
 
 ## Passo a passo para publicar
 
@@ -16,7 +23,6 @@ Vá em **vercel.com** → "Sign Up" → pode entrar com uma conta do GitHub, Goo
 ou e-mail. É gratuito para esse tipo de uso.
 
 ### 2. Subir esses arquivos
-A forma mais simples, sem precisar saber programação:
 1. Crie uma conta gratuita em **github.com**, se ainda não tiver.
 2. Crie um repositório novo (botão verde "New").
 3. Faça upload dos 3 itens deste pacote (`index.html`, a pasta `api`, e
@@ -26,23 +32,35 @@ A forma mais simples, sem precisar saber programação:
    Repository"** e selecione esse repositório do GitHub.
 5. Pode deixar todas as configurações como estão e clicar em **"Deploy"**.
 
-### 3. Criar o banco de dados (Vercel KV)
-1. Depois que o projeto for criado na Vercel, vá na aba **"Storage"** do
-   projeto.
-2. Clique em **"Create Database"** → escolha **"KV"** (Redis) → dê um nome
-   qualquer → **Create**.
-3. Na tela seguinte, clique em **"Connect Project"** e selecione este
-   mesmo projeto. A Vercel conecta tudo sozinha (variáveis de ambiente
-   automáticas).
-4. Vá na aba **"Deployments"** do projeto e clique nos "..." do último
-   deploy → **"Redeploy"** (só pra garantir que ele pega o banco de dados
-   novo).
+### 3. Instalar o banco de dados (Upstash, pelo Marketplace)
+1. Depois que o projeto for criado, abra o painel do projeto na Vercel.
+2. Vá na aba **"Storage"** (ou em "Integrations" / "Marketplace", dependendo
+   da versão da tela).
+3. Procure por **"Upstash"** (Redis) e clique em **Install** / **Add
+   Integration**.
+4. Ele vai pedir pra você conectar (ou criar) uma conta Upstash — pode deixar
+   a Vercel gerenciar isso automaticamente.
+5. Escolha criar um banco Redis novo (qualquer nome, região mais próxima do
+   Brasil se tiver opção).
+6. Na etapa de conectar aos projetos, marque este projeto e marque **todos os
+   ambientes** (Production, Preview e Development) — não deixe só
+   "Production" marcado.
+7. Confirme. A Vercel vai injetar as variáveis de ambiente
+   (`KV_REST_API_URL`, `KV_REST_API_TOKEN`) automaticamente no projeto.
 
-### 4. Pronto
-O link do projeto (algo como `central-comissao-crces-mulher.vercel.app`) já
-é o link definitivo — pode compartilhar com todo mundo. A senha de
-organizadora continua sendo **2609**, e agora os dados nunca mais se
-perdem, mesmo quando o código for atualizado no futuro.
+### 4. Redeploy
+Vá em **"Deployments"**, clique nos "..." do último deploy → **"Redeploy"** —
+isso garante que a nova conexão com o banco chegue ao site.
+
+### 5. Use sempre o link de Produção
+Depois do deploy, use o link marcado como **Production** no painel (não um
+link de preview com "-git-" no meio) — é esse que fica fixo e é o que deve
+ser compartilhado com a comissão.
+
+### 6. Conferir se está funcionando
+Abra o site publicado e olhe no canto superior direito: deve aparecer
+**🟢 Dados sincronizados**. Se aparecer **🔴 Falha ao salvar/carregar**, o
+banco ainda não está conectado direito — repita o passo 3.
 
 ## Se precisar atualizar o app no futuro
 Basta substituir o arquivo `index.html` no repositório do GitHub (upload de
